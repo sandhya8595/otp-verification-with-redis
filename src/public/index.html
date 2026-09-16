@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OTP Verification | SecureAuth</title>
+  <meta name="description" content="Secure phone number verification using one-time passwords powered by Redis." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a12; --surface: rgba(255,255,255,0.04); --border: rgba(255,255,255,0.08);
+      --accent: #6c63ff; --accent2: #a78bfa; --success: #10d9a0; --error: #ff5c7c;
+      --warn: #ff9f43; --text: #f0f0ff; --muted: #8888aa;
+    }
+    body { font-family: Inter,sans-serif; background: var(--bg); color: var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+    .bg-blob { position:fixed; border-radius:50%; filter:blur(80px); opacity:.15; pointer-events:none; animation:blobFloat 8s ease-in-out infinite; }
+    .bg-blob-1 { width:520px; height:520px; background:#6c63ff; top:-160px; left:-160px; }
+    .bg-blob-2 { width:420px; height:420px; background:#a78bfa; bottom:-130px; right:-130px; animation-delay:-3s; }
+    .bg-blob-3 { width:320px; height:320px; background:#10d9a0; top:55%; left:55%; transform:translate(-50%,-50%); animation-delay:-5s; }
+    @keyframes blobFloat { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-28px) scale(1.04)} }
+    body::before { content:''; position:fixed; inset:0; background-image:radial-gradient(circle,rgba(108,99,255,.07) 1px,transparent 1px); background-size:32px 32px; pointer-events:none; }
+    .card { position:relative; background:rgba(14,14,28,.75); backdrop-filter:blur(32px); -webkit-backdrop-filter:blur(32px); border:1px solid var(--border); border-radius:28px; padding:44px 40px 40px; width:min(490px,calc(100vw - 24px)); box-shadow:0 32px 80px rgba(0,0,0,.55); animation:cardIn .55s cubic-bezier(.16,1,.3,1) both; overflow-y:auto; max-height:96vh; }
+    @keyframes cardIn { from{opacity:0;transform:translateY(36px) scale(.96)} to{opacity:1;transform:none} }
+    .icon-wrap { width:60px; height:60px; background:linear-gradient(135deg,#6c63ff,#a78bfa); border-radius:18px; display:flex; align-items:center; justify-content:center; margin-bottom:22px; box-shadow:0 8px 28px rgba(108,99,255,.4); animation:iconPulse 3s ease-in-out infinite; }
+    @keyframes iconPulse { 0%,100%{box-shadow:0 8px 28px rgba(108,99,255,.4)} 50%{box-shadow:0 8px 44px rgba(108,99,255,.68)} }
+    .icon-wrap svg { width:30px; height:30px; color:#fff; }
+    h1 { font-size:1.6rem; font-weight:800; letter-spacing:-.4px; margin-bottom:5px; }
+    .subtitle { color:var(--muted); font-size:.87rem; margin-bottom:28px; line-height:1.55; }
+    .section { display:none; }
+    .section.active { display:block; animation:fadeSlide .38s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes fadeSlide { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+    label { display:block; font-size:.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.09em; margin-bottom:8px; }
+    .input-group { position:relative; margin-bottom:16px; }
+    .email-prefix { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:.92rem; color:var(--accent2); font-weight:700; pointer-events:none; }
+    input[type=email] { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:13px; padding:14px 14px 14px 14px; color:var(--text); font-size:1rem; font-family:Inter,sans-serif; font-weight:500; outline:none; transition:border-color .22s,box-shadow .22s,background .22s; }
+    input::placeholder { color:rgba(255,255,255,.18); }
+    input[type=email]:focus { border-color:var(--accent); background:rgba(108,99,255,.06); box-shadow:0 0 0 3px rgba(108,99,255,.18); }
+    .btn { width:100%; padding:14px; border:none; border-radius:13px; font-family:Inter,sans-serif; font-size:.95rem; font-weight:700; cursor:pointer; transition:all .22s cubic-bezier(.16,1,.3,1); position:relative; overflow:hidden; }
+    .btn::after { content:''; position:absolute; inset:0; background:rgba(255,255,255,0); transition:background .18s; }
+    .btn:hover::after { background:rgba(255,255,255,.08); }
+    .btn:active { transform:scale(.98); }
+    .btn-primary { background:linear-gradient(135deg,#6c63ff,#a78bfa); color:#fff; box-shadow:0 8px 22px rgba(108,99,255,.32); }
+    .btn-primary:hover { box-shadow:0 10px 30px rgba(108,99,255,.48); transform:translateY(-1px); }
+    .btn-primary:disabled { opacity:.45; cursor:not-allowed; transform:none !important; box-shadow:none; }
+    .btn-ghost { background:transparent; color:var(--accent2); border:1px solid var(--border); font-size:.84rem; padding:10px; margin-top:9px; }
+    .btn-ghost:hover { border-color:var(--accent); background:rgba(108,99,255,.07); }
+    .steps { display:flex; gap:7px; margin-bottom:26px; align-items:center; }
+    .step-dot { width:7px; height:7px; border-radius:50%; background:var(--border); transition:all .28s; }
+    .step-dot.active { background:var(--accent); box-shadow:0 0 8px var(--accent); width:22px; border-radius:4px; }
+    .step-dot.done { background:var(--success); }
+    .email-tag { display:inline-flex; align-items:center; gap:6px; background:rgba(108,99,255,.1); border:1px solid rgba(108,99,255,.22); border-radius:8px; padding:4px 10px; font-size:.82rem; color:var(--accent2); font-weight:600; margin-bottom:16px; }
+    .otp-display { background:linear-gradient(135deg,rgba(108,99,255,.11),rgba(167,139,250,.07)); border:1px solid rgba(108,99,255,.32); border-radius:16px; padding:20px 16px 16px; margin-bottom:20px; text-align:center; position:relative; overflow:hidden; }
+    .otp-display::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(108,99,255,.75),transparent); }
+    .otp-display-label { font-size:.69rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--accent2); margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .live-dot { width:6px; height:6px; background:var(--success); border-radius:50%; animation:blink 1.2s ease-in-out infinite; flex-shrink:0; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+    .otp-code { font-size:2.5rem; font-weight:800; letter-spacing:.28em; background:linear-gradient(135deg,#fff,var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .otp-code.anim { animation:codeReveal .45s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes codeReveal { from{opacity:0;transform:scale(.82) translateY(8px);letter-spacing:.5em} to{opacity:1;transform:none;letter-spacing:.28em} }
+    .timer-wrap { display:flex; align-items:center; gap:8px; margin-top:10px; }
+    .timer-bar-bg { flex:1; height:4px; background:rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
+    .timer-bar { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:99px; transition:width 1s linear,background .5s; }
+    .timer-bar.warn { background:linear-gradient(90deg,var(--warn),var(--error)); }
+    .timer-text { font-size:.74rem; font-weight:700; color:var(--accent2); min-width:30px; text-align:right; }
+    .copy-btn { background:none; border:none; cursor:pointer; color:var(--accent2); font-size:.74rem; font-weight:600; display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border-radius:6px; transition:background .18s,color .18s; margin-top:4px; font-family:Inter,sans-serif; }
+    .copy-btn:hover { background:rgba(108,99,255,.1); color:#fff; }
+    .copy-btn svg { width:12px; height:12px; }
+    .otp-inputs { display:flex; gap:7px; justify-content:center; margin-bottom:18px; }
+    .otp-box { width:48px; height:56px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; font-size:1.4rem; font-weight:700; text-align:center; color:var(--text); font-family:Inter,sans-serif; outline:none; transition:border-color .2s,box-shadow .2s,background .2s; caret-color:var(--accent); }
+    .otp-box:focus { border-color:var(--accent); background:rgba(108,99,255,.06); box-shadow:0 0 0 3px rgba(108,99,255,.16); }
+    .otp-box.filled { border-color:rgba(108,99,255,.45); }
+    .otp-box.error-box { border-color:rgba(255,92,124,.5); background:rgba(255,92,124,.05); }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-7px)} 40%,80%{transform:translateX(7px)} }
+    .attempt-dots { display:flex; gap:7px; justify-content:center; margin-bottom:16px; align-items:center; }
+    .attempt-label { font-size:.7rem; color:var(--muted); font-weight:600; margin-right:4px; }
+    .attempt-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,.1); border:1.5px solid rgba(255,255,255,.14); transition:all .3s; }
+    .attempt-dot.used { background:var(--error); border-color:var(--error); box-shadow:0 0 8px rgba(255,92,124,.45); }
+    .attempt-dot.last { animation:pulseDot 1s ease-in-out infinite; }
+    @keyframes pulseDot { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
+    .resend-wrap { display:flex; align-items:center; justify-content:center; margin-top:10px; gap:9px; }
+    .resend-ring { position:relative; width:32px; height:32px; flex-shrink:0; }
+    .resend-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
+    .resend-ring circle.bg { fill:none; stroke:rgba(255,255,255,.08); stroke-width:3; }
+    .resend-ring circle.fg { fill:none; stroke:var(--accent2); stroke-width:3; stroke-linecap:round; stroke-dasharray:75.4; stroke-dashoffset:75.4; transition:stroke-dashoffset 1s linear; }
+    .resend-btn { background:none; border:none; cursor:pointer; color:var(--accent2); font-size:.83rem; font-weight:600; font-family:Inter,sans-serif; padding:0; transition:opacity .2s; }
+    .resend-btn:disabled { cursor:not-allowed; opacity:.38; color:var(--muted); }
+    .resend-cd { color:var(--muted); }
+    .status { padding:11px 14px; border-radius:10px; font-size:.83rem; font-weight:500; margin-bottom:12px; display:none; align-items:center; gap:8px; }
+    .status.show { display:flex; animation:fadeSlide .26s ease both; }
+    .status.success { background:rgba(16,217,160,.09); border:1px solid rgba(16,217,160,.26); color:var(--success); }
+    .status.error { background:rgba(255,92,124,.09); border:1px solid rgba(255,92,124,.26); color:var(--error); }
+    .status.warn { background:rgba(255,159,67,.09); border:1px solid rgba(255,159,67,.26); color:var(--warn); }
+    .status svg { width:16px; height:16px; flex-shrink:0; }
+    .spinner { width:17px; height:17px; border:2px solid rgba(255,255,255,.26); border-top-color:#fff; border-radius:50%; animation:spin .65s linear infinite; display:inline-block; vertical-align:middle; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .divider { height:1px; background:var(--border); margin:20px 0; }
+    .success-screen, .locked-screen { text-align:center; padding:14px 0; }
+    .check-wrap, .lock-wrap { width:82px; height:82px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; animation:successPop .55s cubic-bezier(.16,1,.3,1) both; }
+    .check-wrap { background:linear-gradient(135deg,rgba(16,217,160,.13),rgba(16,217,160,.04)); border:2px solid rgba(16,217,160,.36); }
+    .lock-wrap { background:linear-gradient(135deg,rgba(255,92,124,.12),rgba(255,92,124,.04)); border:2px solid rgba(255,92,124,.34); }
+    @keyframes successPop { from{opacity:0;transform:scale(.45)} to{opacity:1;transform:scale(1)} }
+    .check-wrap svg { width:40px; height:40px; color:var(--success); }
+    .lock-wrap svg { width:36px; height:36px; color:var(--error); }
+    .success-title { font-size:1.4rem; font-weight:800; margin-bottom:6px; }
+    .lock-title { font-size:1.3rem; font-weight:800; margin-bottom:6px; color:var(--error); }
+    .success-sub, .lock-sub { color:var(--muted); font-size:.86rem; line-height:1.5; }
+    .verified-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(16,217,160,.1); border:1px solid rgba(16,217,160,.24); border-radius:99px; padding:5px 13px; font-size:.8rem; color:var(--success); font-weight:600; margin:12px 0; }
+    .lock-countdown { font-size:2.2rem; font-weight:800; color:var(--error); margin:10px 0; }
+    .debug-panel { margin-top:20px; border:1px solid rgba(108,99,255,.17); border-radius:13px; overflow:hidden; }
+    .debug-toggle { width:100%; padding:10px 15px; background:rgba(108,99,255,.06); border:none; color:var(--muted); font-size:.75rem; font-weight:700; font-family:Inter,sans-serif; cursor:pointer; display:flex; align-items:center; justify-content:space-between; transition:background .18s; letter-spacing:.06em; text-transform:uppercase; }
+    .debug-toggle:hover { background:rgba(108,99,255,.1); }
+    .debug-toggle .arrow { transition:transform .25s; display:inline-block; }
+    .debug-toggle.open .arrow { transform:rotate(180deg); }
+    .debug-body { display:none; padding:12px 15px; gap:9px; flex-direction:column; }
+    .debug-body.open { display:flex; animation:fadeSlide .22s ease both; }
+    .debug-row { display:flex; align-items:center; justify-content:space-between; font-size:.78rem; }
+    .debug-key { color:var(--muted); font-weight:500; }
+    .debug-val { font-weight:700; }
+    .debug-val.green { color:var(--success); }
+    .debug-val.red { color:var(--error); }
+    .debug-val.orange { color:var(--warn); }
+    .debug-div { height:1px; background:var(--border); }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(70px); background:rgba(18,18,36,.95); backdrop-filter:blur(20px); border:1px solid rgba(108,99,255,.28); border-radius:11px; padding:11px 18px; font-size:.83rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:7px; transition:transform .32s cubic-bezier(.16,1,.3,1),opacity .32s; opacity:0; z-index:999; pointer-events:none; white-space:nowrap; }
+    .toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+    .toast svg { width:15px; height:15px; color:var(--success); flex-shrink:0; }
+    /* SMS sent banner */
+    .sms-banner { display:flex; align-items:flex-start; gap:14px; background:linear-gradient(135deg,rgba(16,217,160,.1),rgba(16,217,160,.04)); border:1px solid rgba(16,217,160,.3); border-radius:16px; padding:18px 16px; margin-bottom:22px; position:relative; overflow:hidden; }
+    .sms-banner::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(16,217,160,.6),transparent); }
+    .sms-banner-icon { width:38px; height:38px; background:rgba(16,217,160,.15); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .sms-banner-icon svg { width:20px; height:20px; color:var(--success); }
+    .sms-banner-body { flex:1; min-width:0; }
+    .sms-banner-title { font-size:.82rem; font-weight:700; color:var(--success); margin-bottom:3px; }
+    .sms-banner-sub { font-size:.76rem; color:var(--muted); line-height:1.4; }
+    .sms-banner-sub span { color:var(--accent2); font-weight:600; }
+    .timer-pill { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+    .timer-pill .timer-bar-bg { width:72px; height:4px; background:rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
+    .timer-pill .timer-bar { height:100%; background:linear-gradient(90deg,var(--success),rgba(16,217,160,.5)); border-radius:99px; transition:width 1s linear,background .5s; }
+    .timer-pill .timer-bar.warn { background:linear-gradient(90deg,var(--warn),var(--error)); }
+    .timer-pill .timer-text { font-size:.78rem; font-weight:800; color:var(--success); }
+    .timer-pill .timer-bar.warn ~ .timer-text { color:var(--error); }
+  </style>
+</head>
+<body>
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <span id="toastMsg">Copied!</span>
+  </div>
+
+  <main class="card" role="main">
+    <div class="icon-wrap" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+      </svg>
+    </div>
+    <div class="steps" id="stepIndicator">
+      <div class="step-dot active" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+      <div class="step-dot" id="dot3"></div>
+      <div class="step-dot" id="dot4"></div>
+    </div>
+
+    <!-- STEP 1: Phone -->
+    <section class="section active" id="sectionPhone">
+      <h1>Verify your email</h1>
+      <p class="subtitle">Enter your email address to receive a one-time passcode. The code will appear on screen instantly.</p>
+      <label for="emailInput">Email Address</label>
+      <div class="input-group">
+        
+        <input type="email" id="emailInput" placeholder="you@example.com"  autocomplete="email" />
+      </div>
+
+      <!-- Hidden: Verification phone same as phone by default -->
+      <input type="hidden" id="verificationEmailInput" value="" />
+
+      <!-- Optional: Real SMS Gateway (collapsed by default) -->
+      <div style="margin-bottom:16px;">
+        <button type="button" onclick="toggleEmailSettings()" style="background:none; border:none; color:var(--muted); font-size:0.75rem; font-family:Inter,sans-serif; cursor:pointer; padding:0; display:flex; align-items:center; gap:5px;">
+          <span id="emailToggleArrow" style="transition:transform 0.2s;">▶</span>
+          Optional: Send real Email (requires SendGrid API key) (requires API key)
+        </button>
+        <div id="emailSettingsBody" style="display:none; margin-top:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:0.8rem;">
+          <label style="font-size:0.7rem;">Email Gateway Provider</label>
+          <select id="emailProviderSelect" onchange="onEmailProviderChange()" style="width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:9px; border-radius:8px; font-weight:600; margin-bottom:10px; outline:none;">
+            <option value="none" selected>Demo / Screen Simulation Only (No API needed)</option>
+            <option value="fast2sms">SendGrid — Send real Emails</option>
+            
+          </select>
+          <div id="sendgridFields" style="display:none;">
+            <label style="font-size:0.7rem;">SendGrid API Key</label>
+            <input type="password" id="sendgridKeyInput" placeholder="Paste SendGrid API Key" oninput="saveEmailConfig()" style="width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:9px 12px; border-radius:8px; font-size:0.82rem; outline:none;" />
+          </div>
+          </div>
+          <div id="sendgridFromFields" style="display:none; margin-top:6px;">
+            <label style="font-size:0.7rem;">From Email</label>
+            <input type="email" id="sendgridFromInput" placeholder="Sender verified in SendGrid" oninput="saveEmailConfig()" style="width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:9px 12px; border-radius:8px; font-size:0.82rem; outline:none;" />
+          </div>
+      </div>
+
+      <div class="status" id="emailStatus" role="alert"></div>
+      <button class="btn btn-primary" id="sendOtpBtn" onclick="sendOtp()">Send OTP</button>
+    </section>
+
+    <!-- STEP 2: OTP Entry -->
+    <section class="section" id="sectionOtp">
+      <h1>Enter passcode</h1>
+      <p class="subtitle">Your OTP code is shown below. Click <strong>Auto-Fill</strong> to fill it in automatically, then click Verify.</p>
+      <div class="email-tag" id="emailTag">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.61a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16z"/></svg>
+        <span id="emailTagText"></span>
+      </div>
+
+      <!-- SMS sent confirmation banner -->
+      <div class="sms-banner" id="emailBanner" aria-live="polite">
+        <div class="sms-banner-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.61a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16z"/></svg>
+        </div>
+        <div class="sms-banner-body">
+          <div class="sms-banner-title">OTP Sent Successfully</div>
+          <div class="sms-banner-sub">A 6-digit code was sent to <span id="emailBannerPhone"></span>. It expires in:</div>
+        </div>
+        <div class="timer-pill">
+          <div class="timer-bar-bg"><div class="timer-bar" id="timerBar" style="width:100%"></div></div>
+          <div class="timer-text" id="timerText">30s</div>
+        </div>
+      </div>
+
+      <div class="attempt-dots" id="attemptDots" aria-label="Attempts remaining">
+        <span class="attempt-label">Attempts:</span>
+        <span class="attempt-dot" id="ad0"></span>
+        <span class="attempt-dot" id="ad1"></span>
+        <span class="attempt-dot" id="ad2"></span>
+      </div>
+
+      <label>Enter the 6-digit code</label>
+      <div class="otp-inputs" id="otpInputs">
+        <input class="otp-box" id="otp0" maxlength="1" type="text" inputmode="numeric" />
+        <input class="otp-box" id="otp1" maxlength="1" type="text" inputmode="numeric" />
+        <input class="otp-box" id="otp2" maxlength="1" type="text" inputmode="numeric" />
+        <input class="otp-box" id="otp3" maxlength="1" type="text" inputmode="numeric" />
+        <input class="otp-box" id="otp4" maxlength="1" type="text" inputmode="numeric" />
+        <input class="otp-box" id="otp5" maxlength="1" type="text" inputmode="numeric" />
+      </div>
+
+      <div class="status" id="otpStatus" role="alert"></div>
+      <button class="btn btn-primary" id="verifyOtpBtn" onclick="verifyOtp()">Verify OTP</button>
+
+      <div class="resend-wrap">
+        <div class="resend-ring" id="resendRing" aria-hidden="true">
+          <svg viewBox="0 0 30 30" width="32" height="32">
+            <circle class="bg" cx="15" cy="15" r="12"/>
+            <circle class="fg" id="resendCircle" cx="15" cy="15" r="12"/>
+          </svg>
+        </div>
+        <button class="resend-btn" id="resendBtn" onclick="resendOtp()" disabled>
+          Resend OTP &mdash; <span class="resend-cd" id="resendCd">30s</span>
+        </button>
+      </div>
+
+      <button class="btn btn-ghost" onclick="goBack()">&#8592; Change email</button>
+
+      <div class="debug-panel" id="debugPanel">
+        <button class="debug-toggle" id="debugToggle" onclick="toggleDebug()">
+          &#128296; Redis Debug Panel <span class="arrow">&#9660;</span>
+        </button>
+        <div class="debug-body" id="debugBody"></div>
+      </div>
+    </section>
+
+    <!-- STEP 3: Success -->
+    <section class="section" id="sectionSuccess">
+      <div class="success-screen">
+        <div class="check-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h1 class="success-title">Verified! &#127881;</h1>
+        <div class="verified-badge">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span id="verifiedEmail"></span>
+        </div>
+        <p class="success-sub">Your email address has been successfully verified and secured.</p>
+        <div class="divider"></div>
+        <button class="btn btn-primary" onclick="resetAll()">Verify another number</button>
+      </div>
+    </section>
+
+    <!-- STEP 4: Locked -->
+    <section class="section" id="sectionLocked">
+      <div class="locked-screen">
+        <div class="lock-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h1 class="lock-title">Account Locked</h1>
+        <p class="lock-sub">Too many failed attempts. Please wait before trying again.</p>
+        <div class="lock-countdown" id="lockCountdown">120s</div>
+        <p class="lock-sub" style="font-size:.76rem; margin-top:4px;">Unlocks automatically</p>
+        <div class="divider"></div>
+        <button class="btn btn-ghost" onclick="resetAll()">&#8592; Start over</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let currentEmail = '', currentVerificationEmail = '', attemptsUsed = 0, lastReceivedOtp = '';
+    let otpTimer = null, resendTimer = null, lockTimer = null, debugPollTO = null;
+
+    const icons = {
+      ok:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+      err:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    };
+
+    function showStatus(id, type, icon, msg) { const el=document.getElementById(id); el.className='status show '+type; el.innerHTML=icon+'<span>'+msg+'</span>'; }
+    function hideStatus(id) { document.getElementById(id).className='status'; }
+    function setLoading(id, on, text) { const b=document.getElementById(id); b.disabled=on; b.innerHTML=on?'<span class="spinner"></span>':text; }
+    function showSection(id) { document.querySelectorAll('.section').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+    function updateDots(step) { for(let i=1;i<=4;i++){const d=document.getElementById('dot'+i); d.className='step-dot'+(i<step?' done':i===step?' active':'');} }
+
+    let toastTO;
+    function showToast(msg) {
+      clearTimeout(toastTO);
+      document.getElementById('toastMsg').textContent = msg;
+      document.getElementById('toast').classList.add('show');
+      toastTO = setTimeout(()=>document.getElementById('toast').classList.remove('show'), 2400);
+    }
+
+    function autoFillOtp(code) {
+      const otpCode = code || lastReceivedOtp;
+      if (!otpCode) return;
+      otpCode.split('').forEach((d, idx) => {
+        const b = document.getElementById('otp' + idx);
+        if (b) { b.value = d; b.classList.add('filled'); }
+      });
+      showToast('OTP Auto-filled: ' + otpCode);
+    }
+
+    async function resetRateLimit() {
+      const raw = document.getElementById('emailInput').value.trim();
+      const phone = raw ? '+91' + raw : currentEmail;
+      if (!phone) return;
+      try {
+        const res = await fetch('/otp/reset-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        showStatus('emailStatus', 'success', icons.ok, data.message + '. You can now request OTP again.');
+        showStatus('otpStatus', 'success', icons.ok, data.message + '. You can now request OTP again.');
+        if (debugOpen) pollDebug();
+      } catch (err) {
+        showStatus('emailStatus', 'error', icons.err, err.message);
+      }
+    }
+
+    function startOtpTimer(sec) {
+      clearInterval(otpTimer);
+      const bar=document.getElementById('timerBar'), txt=document.getElementById('timerText');
+      if (!bar || !txt) return;
+      let rem=sec;
+      function tick() {
+        bar.style.width=(rem/sec*100)+'%';
+        bar.className='timer-bar'+(rem<=8?' warn':'');
+        txt.textContent=rem+'s';
+        if(rem--<=0){ clearInterval(otpTimer); showStatus('otpStatus','error',icons.err,'OTP expired. Click Resend OTP to get a new one.'); }
+      }
+      tick(); otpTimer=setInterval(tick,1000);
+    }
+
+    function startResendTimer(sec) {
+      clearInterval(resendTimer);
+      const btn=document.getElementById('resendBtn'), circle=document.getElementById('resendCircle');
+      if (!btn || !circle) return;
+      const C=75.4; btn.disabled=true; let rem=sec;
+      function tick() {
+        circle.style.strokeDashoffset=C*(1-rem/sec);
+        btn.innerHTML='Resend OTP &mdash; <span class="resend-cd" id="resendCd">'+rem+'s</span>';
+        if(rem--<=0){ clearInterval(resendTimer); circle.style.strokeDashoffset=0; btn.innerHTML='Resend OTP'; btn.disabled=false; }
+      }
+      tick(); resendTimer=setInterval(tick,1000);
+    }
+
+    function updateAttemptDots(used) {
+      attemptsUsed=used;
+      for(let i=0;i<3;i++){
+        const d=document.getElementById('ad'+i);
+        d.className='attempt-dot'+(i<used?' used':'')+(i===used-1&&used<3?' last':'');
+      }
+    }
+
+    function startLockCountdown(sec) {
+      clearInterval(lockTimer); let rem=sec;
+      const countdown = document.getElementById('lockCountdown');
+      if (!countdown) return;
+      function tick() {
+        countdown.textContent=rem+'s';
+        if(rem--<=0){ clearInterval(lockTimer); countdown.textContent='Unlocked!'; setTimeout(()=>resetAll(),1100); }
+      }
+      tick(); lockTimer=setInterval(tick,1000);
+    }
+
+    let debugOpen=false;
+    function toggleDebug() {
+      debugOpen=!debugOpen;
+      document.getElementById('debugToggle').className='debug-toggle'+(debugOpen?' open':'');
+      document.getElementById('debugBody').className='debug-body'+(debugOpen?' open':'');
+      if(debugOpen) schedulePollDebug();
+    }
+    function schedulePollDebug() { clearTimeout(debugPollTO); if(debugOpen) { pollDebug(); debugPollTO=setTimeout(schedulePollDebug,2000); } }
+    async function pollDebug() {
+      if(!currentEmail||!debugOpen) return;
+      try {
+        const r=await fetch('/otp/'+encodeURIComponent(currentEmail)+'/status');
+        const d=await r.json();
+        function row(label,val,cls){ return '<div class="debug-row"><span class="debug-key">'+label+'</span><span class="debug-val '+cls+'">'+val+'</span></div>'; }
+        document.getElementById('debugBody').innerHTML=[
+          row('Active OTP (Redis)', d.activeOtp ? d.activeOtp : 'None', d.activeOtp ? 'green' : 'red'),
+          '<div class="debug-div"></div>',
+          row('OTP TTL', d.otpTtl>0?d.otpTtl+'s':'Expired', d.otpTtl>5?'green':d.otpTtl>0?'orange':'red'),
+          '<div class="debug-div"></div>',
+          row('Failed attempts', d.attempts+' / 3', d.attempts===0?'green':d.attempts>=2?'red':'orange'),
+          row('Attempts left', d.attemptsLeft, d.attemptsLeft===3?'green':d.attemptsLeft===1?'red':'orange'),
+          '<div class="debug-div"></div>',
+          row('Locked', d.isLocked?'Yes — '+d.lockedFor+'s':'No', d.isLocked?'red':'green'),
+          '<div class="debug-div"></div>',
+          row('Rate requests used', d.rateRequestsUsed+' / 3', d.rateRequestsUsed>=3?'red':d.rateRequestsUsed>=2?'orange':'green'),
+          row('Rate window resets in', d.rateWindowTtl>0?d.rateWindowTtl+'s':'N/A',''),
+        ].join('');
+      } catch(e){}
+    }
+
+    function setupOtpBoxes() {
+      for(let i=0;i<6;i++){
+        const box=document.getElementById('otp'+i);
+        box.addEventListener('input',()=>{ box.value=box.value.replace(/\D/g,'').slice(-1); box.classList.toggle('filled',!!box.value); box.classList.remove('error-box'); if(box.value&&i<5) document.getElementById('otp'+(i+1)).focus(); });
+        box.addEventListener('keydown',e=>{ if(e.key==='Backspace'&&!box.value&&i>0) document.getElementById('otp'+(i-1)).focus(); });
+        box.addEventListener('paste',e=>{ e.preventDefault(); const p=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6); p.split('').forEach((d,idx)=>{const b=document.getElementById('otp'+idx);if(b){b.value=d;b.classList.add('filled');}});const nx=document.getElementById('otp'+Math.min(p.length,5));if(nx)nx.focus(); });
+      }
+    }
+    function clearBoxes(){ for(let i=0;i<6;i++){const b=document.getElementById('otp'+i);b.value='';b.classList.remove('filled','error-box');} }
+    function getOtp(){ return Array.from({length:6},(_,i)=>document.getElementById('otp'+i).value).join(''); }
+    function shakeBoxes(){
+      const inp=document.getElementById('otpInputs');
+      inp.style.animation='none';
+      requestAnimationFrame(()=>{inp.style.animation='shake .42s ease';});
+      for(let i=0;i<6;i++) document.getElementById('otp'+i).classList.add('error-box');
+      setTimeout(()=>{for(let i=0;i<6;i++) document.getElementById('otp'+i).classList.remove('error-box');},640);
+    }
+
+    function getEmailProviderConfig() {
+      const provider = document.getElementById('emailProviderSelect').value;
+      return {
+        provider,
+        sendgridKey: document.getElementById('sendgridKeyInput').value.trim(),
+        sendgridFrom: document.getElementById('sendgridFromInput').value.trim(),
+      };
+    }
+
+    function saveEmailConfig() {
+      const cfg = getEmailProviderConfig();
+      localStorage.setItem('email_gateway_cfg', JSON.stringify(cfg));
+    }
+
+    function loadEmailConfig() {
+      const raw = localStorage.getItem('email_gateway_cfg');
+      if (raw) {
+        try {
+          const cfg = JSON.parse(raw);
+          if (cfg.provider) document.getElementById('emailProviderSelect').value = cfg.provider;
+          if (cfg.sendgridKey) document.getElementById('sendgridKeyInput').value = cfg.sendgridKey;
+          if (cfg.sendgridFrom) document.getElementById('sendgridFromInput').value = cfg.sendgridFrom;
+        } catch(e){}
+      }
+      onEmailProviderChange();
+    }
+
+    function onEmailProviderChange() {
+      const p = document.getElementById('emailProviderSelect').value;
+      document.getElementById('sendgridFields').style.display = p === 'sendgrid' ? 'block' : 'none';
+      document.getElementById('sendgridFromFields').style.display = p === 'sendgrid' ? 'block' : 'none';
+      saveEmailConfig();
+    }
+
+    let emailSettingsOpen = false;
+    function toggleEmailSettings() {
+      emailSettingsOpen = !emailSettingsOpen;
+      document.getElementById('emailSettingsBody').style.display = emailSettingsOpen ? 'block' : 'none';
+      document.getElementById('emailToggleArrow').style.transform = emailSettingsOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+    }
+
+    async function sendOtp() {
+      hideStatus('emailStatus');
+      // Get and validate phone number
+      const raw = document.getElementById('emailInput').value.trim();
+      const verificationRaw = document.getElementById('verificationEmailInput').value.trim();
+
+      if (!raw || raw.length < 3) {
+        showStatus('emailStatus', 'error', icons.err, 'Please enter a valid email address.');
+        return;
+      }
+      // If verification phone not provided, default to same as phone
+      const verificationRawUsed = verificationRaw.length >= 3 ? verificationRaw : raw;
+      if (verificationRaw && verificationRaw.length < 10) {
+        showStatus('emailStatus', 'error', icons.err, 'Please enter a valid 10-digit verification phone number.');
+        return;
+      }
+
+      const email = raw;
+      const verificationEmail = verificationRawUsed;
+      const providerConfig = getEmailProviderConfig();
+
+      setLoading('sendOtpBtn', true, 'Send OTP');
+      try {
+        const res = await fetch('/otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, verificationEmail, providerConfig })
+        });
+        const data = await res.json();
+        if (res.status === 429) {
+          showStatus('emailStatus', 'warn', icons.warn, data.message + ' <br/><button class="copy-btn" onclick="resetRateLimit()" style="margin-top:6px; background:rgba(255,159,67,0.22); color:#fff; padding:4px 10px;">⚡ Reset Limit Now</button>');
+          return;
+        }
+        if (res.status === 403) { showStatus('emailStatus', 'error', icons.err, data.message); return; }
+        if (!res.ok) throw new Error(data.message);
+        currentEmail = email;
+        currentVerificationEmail = verificationEmail;
+        lastReceivedOtp = data.otp || '';
+
+        const emailTagEl = document.getElementById('emailTagText');
+        if (emailTagEl) emailTagEl.textContent = email;
+        const emailBannerPhoneEl = document.getElementById('emailBannerPhone');
+        if (emailBannerPhoneEl) emailBannerPhoneEl.textContent = verificationEmail;
+
+
+        let statusMsg = '';
+        if (data.emailResult && data.emailResult.sent) {
+          statusMsg = `📱 <strong>REAL EMAIL DELIVERED</strong> to ${verificationEmail} via ${data.emailResult.provider.toUpperCase()}!`;
+        } else if (data.emailErrorCode === 'FAST2SMS_AUTH_DISABLED') {
+          statusMsg = `Fast2SMS key is disabled. Enable the Authorization Key in Fast2SMS Dev API or replace FAST2SMS_API_KEY in .env. Simulated Code: <strong>${lastReceivedOtp}</strong>`;
+        } else if (data.emailError) {
+          statusMsg = `⚠️ Real Email Error: ${data.emailError}. <br/>Fallback Simulated Code: <strong>${lastReceivedOtp}</strong> <button class="copy-btn" onclick="autoFillOtp('${lastReceivedOtp}')" style="margin-left:8px; background:rgba(16,217,160,0.22); color:#fff; padding:3px 9px;">✨ Auto-Fill</button>`;
+        } else if (lastReceivedOtp) {
+          statusMsg = `📱 [Simulated Email to ${verificationEmail}] Code: <strong>${lastReceivedOtp}</strong> <button class="copy-btn" onclick="autoFillOtp('${lastReceivedOtp}')" style="margin-left:8px; background:rgba(16,217,160,0.22); color:#fff; padding:3px 9px;">✨ Auto-Fill</button>`;
+        }
+
+        if (statusMsg) showStatus('otpStatus', data.emailResult && data.emailResult.sent ? 'success' : 'warn', data.emailResult && data.emailResult.sent ? icons.ok : icons.warn, statusMsg);
+
+        clearBoxes(); updateAttemptDots(0);
+        showSection('sectionOtp'); updateDots(2);
+        startOtpTimer(30); startResendTimer(30);
+        if (data.requestsLeft === 1) showStatus('otpStatus', 'warn', icons.warn, 'Only 1 OTP request left in this 5-minute window.');
+        if (debugOpen) schedulePollDebug();
+      } catch (err) {
+        showStatus('emailStatus', 'error', icons.err, err.message);
+      } finally {
+        setLoading('sendOtpBtn', false, 'Send OTP');
+      }
+    }
+
+    async function resendOtp() {
+      hideStatus('otpStatus'); clearBoxes(); updateAttemptDots(0);
+      // Guard: ensure an email is set before attempting resend
+      if (!currentEmail) {
+        showStatus('otpStatus','error',icons.err,'Email not set. Please request OTP first.');
+        return;
+      }
+      const providerConfig = getEmailProviderConfig();
+      try {
+        const res=await fetch('/otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:currentEmail, verificationEmail:currentVerificationEmail, providerConfig})});
+        const data=await res.json();
+        if(res.status===429){
+          showStatus('otpStatus','warn',icons.warn, data.message + ' <br/><button class="copy-btn" onclick="resetRateLimit()" style="margin-top:6px; background:rgba(255,159,67,0.22); color:#fff; padding:4px 10px;">⚡ Reset Limit Now</button>');
+          return;
+        }
+        if(res.status===403){triggerLock(data.lockedFor||120);return;}
+        if(!res.ok) throw new Error(data.message);
+        lastReceivedOtp = data.otp || '';
+        clearBoxes(); clearInterval(otpTimer); startOtpTimer(30); startResendTimer(30);
+
+        let statusMsg = '';
+        if (data.emailResult && data.emailResult.sent) {
+          statusMsg = `📱 <strong>REAL EMAIL DELIVERED</strong> to ${currentVerificationEmail} via ${data.emailResult.provider.toUpperCase()}!`;
+        } else if (data.emailErrorCode === 'FAST2SMS_AUTH_DISABLED') {
+          statusMsg = `Fast2SMS key is disabled. Enable the Authorization Key in Fast2SMS Dev API or replace FAST2SMS_API_KEY in .env. Simulated Code: <strong>${lastReceivedOtp}</strong>`;
+        } else if (data.emailError) {
+          statusMsg = `⚠️ Real Email Error: ${data.emailError}. <br/>Fallback Simulated Code: <strong>${lastReceivedOtp}</strong> <button class="copy-btn" onclick="autoFillOtp('${lastReceivedOtp}')" style="margin-left:8px; background:rgba(16,217,160,0.22); color:#fff; padding:3px 9px;">✨ Auto-Fill</button>`;
+        } else {
+          statusMsg = `📱 [Simulated Email to ${currentVerificationEmail}] New Code: <strong>${lastReceivedOtp}</strong> <button class="copy-btn" onclick="autoFillOtp('${lastReceivedOtp}')" style="margin-left:8px; background:rgba(16,217,160,0.22); color:#fff; padding:3px 9px;">✨ Auto-Fill</button>`;
+        }
+        showStatus('otpStatus', data.emailResult && data.emailResult.sent ? 'success' : 'warn', data.emailResult && data.emailResult.sent ? icons.ok : icons.warn, statusMsg);
+
+        if(debugOpen) schedulePollDebug();
+      } catch(err){showStatus('otpStatus','error',icons.err,err.message);}
+    }
+
+    async function verifyOtp() {
+      hideStatus('otpStatus');
+      const otp=getOtp();
+      if(otp.length<6){showStatus('otpStatus','error',icons.err,'Please enter all 6 digits.');return;}
+      setLoading('verifyOtpBtn',true,'Verify OTP');
+      try {
+        const res=await fetch('/otp/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:currentEmail,otp})});
+        const data=await res.json();
+        if(res.status===403&&data.lockedFor){triggerLock(data.lockedFor);return;}
+        if(!res.ok){
+          shakeBoxes();
+          const used=typeof data.attemptsLeft==='number'?3-data.attemptsLeft:attemptsUsed+1;
+          updateAttemptDots(used);
+          showStatus('otpStatus','error',icons.err,data.message);
+          return;
+        }
+        clearInterval(otpTimer); clearInterval(resendTimer);
+        const verifiedEl = document.getElementById('verifiedEmail');
+        if (verifiedEl) verifiedEl.textContent = currentEmail;
+        showSection('sectionSuccess'); updateDots(3);
+      } catch(err){showStatus('otpStatus','error',icons.err,err.message);}
+      finally{setLoading('verifyOtpBtn',false,'Verify OTP');}
+    }
+
+    function triggerLock(sec) {
+      clearInterval(otpTimer); clearInterval(resendTimer);
+      showSection('sectionLocked'); updateDots(4);
+      startLockCountdown(sec);
+    }
+
+    function goBack() {
+      clearInterval(otpTimer); clearInterval(resendTimer);
+      clearBoxes(); hideStatus('otpStatus');
+      showSection('sectionPhone'); updateDots(1);
+    }
+    function resetAll() {
+      clearInterval(otpTimer); clearInterval(resendTimer); clearInterval(lockTimer); clearTimeout(debugPollTO);
+      currentEmail=''; attemptsUsed=0; debugOpen=false;
+      document.getElementById('emailInput').value='';
+      document.getElementById('verificationEmailInput').value='';
+      document.getElementById('timerBar').style.width='100%';
+      document.getElementById('debugToggle').className='debug-toggle';
+      document.getElementById('debugBody').className='debug-body';
+      clearBoxes(); updateAttemptDots(0);
+      hideStatus('emailStatus'); hideStatus('otpStatus');
+      showSection('sectionPhone'); updateDots(1);
+    }
+
+    document.getElementById('emailInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendOtp();});
+    document.getElementById('verificationEmailInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendOtp();});
+    setupOtpBoxes();
+    loadEmailConfig();
+  </script>
+</body>
+</html>
