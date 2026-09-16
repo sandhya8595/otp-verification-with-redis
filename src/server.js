@@ -30,7 +30,7 @@ app.use(express.json()); // express middleware
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 app.use(express.static(path.join(__dirname, "public")));
 
-const redis = new Redis("redis://localhost:6379");
+const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
 // ── Redis key helpers ──
 function otpKey(email)       { return `otp:${email}`; }
@@ -227,6 +227,7 @@ app.get("/otp/:email/status", async (req, res) => {
   });
 });
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
