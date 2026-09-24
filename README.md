@@ -166,4 +166,4 @@ Through this project, I practiced:
 
 * OTPs are stored temporarily in Redis and automatically expire.
 * Sensitive credentials are managed through environment variables.
-* OTP verificat
+  
